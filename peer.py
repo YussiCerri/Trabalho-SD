@@ -145,20 +145,42 @@ class Peer:
     def ouvir_peers(self):
         while True:
             client_socket, client_address = self.sock.accept()
-            data = client_socket.recv(4096).decode().split("\x1f")#trava os programas
+            data = client_socket.recv(4096).decode().split("\x1f")#Causa trava nos programas
             client_socket.close()
             match int(data[0]):
                 case 1:#recebeu uma mensagem
-                    if self.coord:#int(data[1]) == self.coord_id:#Se foi manda
+                    if self.coord:
                         msg = f"1\x1f{self.id}\x1f{data[2]}".encode()
-                        for nome in self.peers:
-                            self.peers[nome]
-                            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                            sock.connect(tuple(self.peers[nome]))
-                            sock.send(msg)
-                            sock.close()
+                        self.repassar_mensagem(msg)
                         print(data[2])
                     elif int(data[1]) == self.coord_id:
                         print(data[2])
+                case 2:#mensagem de remoção
+                    if int(data[1])== self.coord_id:
+                        #self.peers.pop(data[2])
+                        del self.peers[data[2]]
 
+    def repassar_mensagem(self,msg):#Repassa Mensagem para todos os peers e detecta quando um peer não responde
+        elimina = []
+        for nome in self.peers:
+            try:#Envia mensagem para um peer
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2.0)
+                sock.connect(tuple(self.peers[nome]))
+                sock.send(msg)
+                sock.close()
+            except ConnectionRefusedError:#Caso não é possível se conectar, assume que se desconectou
+                elimina.append(nome)#adiciona mensagens e
+
+        for nome in elimina:#elimina peers ausentes
+            del self.peers[nome]
+        for nome_el in elimina:
+            msg2 = f"2\x1f{self.id}\x1f{nome_el}".encode()
+            for nome in self.peers:#Envia para todos os peers restantes
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2.0)
+                sock.connect(tuple(self.peers[nome]))
+                sock.send(msg2)
+                sock.close()
+        
 Peer()
