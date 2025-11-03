@@ -4,8 +4,8 @@ import json
 import threading
 from random import randint
 #Multicast Global
-PORTA_MC = 4000
-IP_MC = "224.1.1.1"
+PORTA_MC = 6000
+IP_MC = "224.1.2.1"
 
 class Peer:
     def __init__(self):
@@ -57,7 +57,8 @@ class Peer:
             #Recebe uma resposta
             data, addr = sock.recvfrom(4096)
             data = data.decode().split("\x1f")
-            match int(data[0]):
+            msg_type = int(data[0])
+            match msg_type:
                 case 1:#Nome Aprovado
                     self.id = int(data[1])#recebe novo id
                     self.nome = nome
@@ -103,7 +104,8 @@ class Peer:
             try:
                 data, addr = sock.recvfrom(4096)#espera mensagens
                 data = data.decode().split("\x1f")
-                match int(data[0]):
+                msg_type = int(data[0])
+                match msg_type:
                     case 0:#Recebeu um pedido de join
                         nome = data[1]#recebe o nome que o usuario quer
                         address = (data[2],int(data[3]))#recebe o endereço do usuario
@@ -133,7 +135,7 @@ class Peer:
         while True:
             try:
                 msg = input("")
-                msg = f"1\x1f{self.id}\x1f{("\033[36m" if self.coord else "\033[30m")}{self.nome}\033[0m:{msg}".encode()
+                msg = f"1\x1f{self.id}\x1f{self.nome}:{msg}".encode()
                 #envia a mensagem para o coordenador, para que este envie para todos
                 sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
                 sock.connect(self.coord_address)
@@ -147,7 +149,7 @@ class Peer:
             client_socket, client_address = self.sock.accept()
             data = client_socket.recv(4096).decode().split("\x1f")#Causa trava nos programas
             client_socket.close()
-            match int(data[0]):
+            match (int(data[0])):
                 case 1:#recebeu uma mensagem
                     if self.coord:
                         msg = f"1\x1f{self.id}\x1f{data[2]}".encode()
@@ -174,6 +176,7 @@ class Peer:
 
         for nome in elimina:#elimina peers ausentes
             del self.peers[nome]
+
         for nome_el in elimina:
             msg2 = f"2\x1f{self.id}\x1f{nome_el}".encode()
             for nome in self.peers:#Envia para todos os peers restantes
