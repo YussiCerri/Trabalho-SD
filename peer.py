@@ -3,6 +3,8 @@ import struct
 import json
 import threading
 import errno
+from random import randint,seed
+from time import sleep
 #Multicast Global
 PORTA_MC = 6000
 IP_MC = "224.1.2.1"
@@ -94,6 +96,7 @@ class Peer:
             match msg_type:
                 case 1:#Nome Aprovado
                     self.id = int(data[1])#recebe novo id
+                    seed(self.id)
                     self.nome = nome
                     self.max_id = self.id #Atualmente é o maior id que conhece
                     self.coord_address = (data[2],int(data[3]))#recebe socket do coordenador
@@ -102,6 +105,7 @@ class Peer:
                     self.coord = False #O nó não é o coordenador
                     self.coord_existe = True
                     self.espera_padrao = 5.0#tempo que um peer espera por um contato com o coordenador
+                    self.last_message = int(data[6])
                     return
                 case 2:#Nome Não Aprovado, fazer voltar o loop
                     print("Nome já está em uso")
@@ -122,6 +126,7 @@ class Peer:
         self.max_id = 0
         self.id = 0
         self.peers = {}
+        self.last_message = 0
         self.virar_coordenador()
 
     def ouvir_Multicast(self):
@@ -162,7 +167,7 @@ class Peer:
                             self.peers[nome] = address
                             self.max_id += 1
                             ip,port = self.address
-                            msg = f"1\x1f{self.max_id}\x1f{ip}\x1f{port}\x1f{json.dumps(self.peers)}\x1f{self.id}".encode()
+                            msg = f"1\x1f{self.max_id}\x1f{ip}\x1f{port}\x1f{json.dumps(self.peers)}\x1f{self.id}\x1f{self.last_message}".encode()
                             sock.sendto(msg,addr)
                             self.repassar_mensagem(f"6\x1f{self.id}\x1f{nome}\x1f{ip}\x1f{port}".encode())
             except KeyboardInterrupt:#encerra programa
@@ -182,7 +187,7 @@ class Peer:
             self.Chat = threading.Thread(target = self.chat, daemon = True)
             self.Chat.start()
             self.ouvir_peers()
-        except:
+        except KeyboardInterrupt:
             return
 
     def chat(self):
@@ -240,9 +245,13 @@ class Peer:
                 match (int(data[0])):
                     case 1:#recebeu uma mensagem
                         if self.coord:
-                            msg = f"1\x1f{self.id}\x1f{data[2]}".encode()
+                            self.last_message += 1
+                            msg = f"1\x1f{self.id}\x1f{data[2]}\x1f{self.last_message}".encode()
                             self.repassar_mensagem(msg)
-                        print(data[2])
+                            print(data[2])
+                        else:
+                            self.escrever_mensagem(data[2],int(data[3]))
+                        #print(data[2])
                     case 2:#mensagem de remoção
                         if int(data[1])== self.coord_id:
                             try:
@@ -329,6 +338,15 @@ class Peer:
                     except:
                         continue
     
+    def escrever_mensagem(self,msg,n):
+        threading.Thread(target = self._escrever,args = (msg,n,),daemon = True).start()
+
+    def _escrever(self,msg,n):
+        while(self.last_message != n-1):
+            continue
+        print(msg)
+        self.last_message = n
+
     def enviar_para_coordenador(self,msg):
         while(self.active):
             try:
@@ -341,6 +359,7 @@ class Peer:
                 self.coord_existe = False
                 while(not self.coord_existe and self.active):
                     continue
+                sleep(randint(1,6)/2)
             finally:
                 sock.close()
 
